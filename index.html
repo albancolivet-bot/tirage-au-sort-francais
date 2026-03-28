@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Tirage au sort</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #1f1c2c, #928DAB);
+      color: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 30px;
+      flex-wrap: wrap;
+      padding: 20px;
+    }
+
+    .card {
+      background: rgba(255,255,255,0.10);
+      backdrop-filter: blur(12px);
+      border-radius: 20px;
+      padding: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+      width: 360px;
+      text-align: center;
+    }
+
+    .wheel-wrapper{
+      position: relative;
+      width: 300px;
+      margin: 10px auto;
+    }
+
+    input {
+      width: 90%;
+      padding: 10px;
+      border-radius: 10px;
+      border: none;
+      margin-bottom: 10px;
+      outline: none;
+    }
+
+    button {
+      width: 100%;
+      padding: 10px;
+      margin-top: 8px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      background: #ff4d6d;
+      color: white;
+      font-weight: bold;
+      transition: 0.2s;
+    }
+
+    button:hover { transform: scale(1.05); }
+
+    canvas {
+      background: white;
+      border-radius: 50%;
+      display: block;
+    }
+
+    .needle {
+      position: absolute;
+      top: -6px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 0;
+      height: 0;
+      border-left: 12px solid transparent;
+      border-right: 12px solid transparent;
+      border-top: 22px solid #ffcc00;
+      z-index: 10;
+    }
+
+    .result {
+      margin-top: 15px;
+      font-size: 20px;
+      min-height: 30px;
+    }
+
+    ul {
+      list-style: none;
+      padding: 0;
+      text-align: left;
+      max-height: 250px;
+      overflow-y: auto;
+    }
+
+    li {
+      padding: 5px;
+      border-bottom: 1px solid rgba(255,255,255,0.2);
+    }
+
+    .checked {
+      text-decoration: line-through;
+      opacity: 0.5;
+    }
+
+    .slider-box{
+      margin-top:10px;
+      text-align:center;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h2>Tirage au sort</h2>
+
+    <div class="wheel-wrapper">
+      <div class="needle" id="needle"></div>
+      <canvas id="wheel" width="300" height="300"></canvas>
+    </div>
+
+    <input id="names" placeholder="Alice, Bob, Charlie">
+    <button onclick="init()">Créer liste</button>
+
+    <div class="slider-box">
+      <input type="range" id="nbTirages" min="1" max="1" value="1" oninput="updateNbLabel()">
+      <div id="nbLabel">Tirages : 1</div>
+    </div>
+
+    <button onclick="runSeries()">Lancer tirages</button>
+    <button onclick="reset()">Reset</button>
+
+    <div class="result" id="result"></div>
+  </div>
+
+  <div class="card">
+    <h2>Élèves</h2>
+    <ul id="list"></ul>
+  </div>
+
+<script>
+let students = [];
+let drawn = [];
+let angle = 0;
+let spinning = false;
+
+window.onload = () => {
+  const s = localStorage.getItem("students");
+  const d = localStorage.getItem("drawn");
+  const a = localStorage.getItem("angle");
+
+  if (s) students = JSON.parse(s);
+  if (d) drawn = JSON.parse(d);
+  if (a) angle = parseFloat(a);
+
+  renderList();
+  drawWheel();
+  updateSliderMax();
+};
+
+function save(){
+  localStorage.setItem("students", JSON.stringify(students));
+  localStorage.setItem("drawn", JSON.stringify(drawn));
+  localStorage.setItem("angle", angle);
+}
+
+function init(){
+  const input = document.getElementById("names").value;
+  students = [...new Set(input.split(",").map(n=>n.trim()).filter(Boolean))];
+  drawn = [];
+  angle = 0;
+  save();
+  renderList();
+  drawWheel();
+  updateSliderMax();
+}
+
+function updateSliderMax(){
+  const s = document.getElementById("nbTirages");
+  s.max = students.length || 1;
+  if(parseInt(s.value) > students.length) s.value = students.length;
+  updateNbLabel();
+}
+
+function updateNbLabel(){
+  document.getElementById("nbLabel").textContent = "Tirages : " + document.getElementById("nbTirages").value;
+}
+
+function renderList(){
+  const list = document.getElementById("list");
+  list.innerHTML = "";
+
+  students.forEach(s=>{
+    const li=document.createElement("li");
+    li.textContent = drawn.includes(s) ? s+" ✔" : s;
+    if(drawn.includes(s)) li.classList.add("checked");
+    list.appendChild(li);
+  });
+}
+
+function drawWheel(){
+  const c=document.getElementById("wheel");
+  const ctx=c.getContext("2d");
+  const r=c.width/2;
+
+  ctx.clearRect(0,0,300,300);
+  if(!students.length) return;
+
+  ctx.save();
+  ctx.translate(r,r);
+  ctx.rotate(angle);
+
+  const step=(Math.PI*2)/students.length;
+
+  students.forEach((s,i)=>{
+    ctx.beginPath();
+    ctx.fillStyle=`hsl(${i*360/students.length},70%,60%)`;
+    ctx.moveTo(0,0);
+    ctx.arc(0,0,r-2,i*step,(i+1)*step);
+    ctx.fill();
+
+    ctx.save();
+    ctx.rotate(i*step+step/2);
+    ctx.fillStyle="#000";
+    ctx.font="12px Arial";
+    ctx.textAlign="right";
+    ctx.fillText(s,r-10,5);
+    ctx.restore();
+  });
+
+  ctx.restore();
+}
+
+function spinOnce(){
+  return new Promise(resolve => {
+
+    const activeStudents = [...students];
+    const n = activeStudents.length;
+    if(!n) return resolve("Aucun élève");
+
+    const twoPi = Math.PI * 2;
+    const step = twoPi / n;
+
+    const winnerIndex = Math.floor(Math.random() * n);
+    const winner = activeStudents[winnerIndex];
+
+    const spins = 8 + Math.random() * 5;
+
+    const finalAngle = (twoPi * spins) + (twoPi - (winnerIndex * step + step / 2));
+
+    const startAngle = angle;
+    let t = 0;
+    const duration = 300;
+
+    function anim(){
+      t++;
+      const p = Math.min(t / duration, 1);
+      const ease = 1 - Math.pow(1 - p, 4);
+
+      angle = startAngle + (finalAngle - startAngle) * ease;
+      drawWheel();
+
+      if(p < 1){
+        requestAnimationFrame(anim);
+      } else {
+        drawn.push(winner);
+        save();
+        renderList();
+        resolve(winner);
+      }
+    }
+
+    requestAnimationFrame(anim);
+  });
+}
+
+async function runSeries(){
+  if(spinning || !students.length) return;
+  spinning = true;
+
+  const count = parseInt(document.getElementById("nbTirages").value);
+
+  for(let i=0;i<count;i++){
+    const winner = await spinOnce();
+    document.getElementById("result").textContent = "👨‍🎓 tirage " + (i+1) + " : " + winner;
+  }
+
+  spinning = false;
+}
+
+function reset(){
+  students=[];
+  drawn=[];
+  angle=0;
+  localStorage.clear();
+  document.getElementById("result").textContent="";
+  renderList();
+  drawWheel();
+  updateSliderMax();
+}
+</script>
+
+</body>
+</html>
